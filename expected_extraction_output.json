@@ -1,0 +1,285 @@
+{
+  "extraction_date": "2025-01-28",
+  "form_recommendation": ["INDIVIDUAL_KYC", "TRADE_SUITABILITY"],
+
+  "extracted_data": {
+    "individual_kyc": {
+      "account_type": "CASH",
+      "registration": "INDIVIDUAL",
+      "is_new_account": true,
+
+      "client_a": {
+        "full_name": {
+          "last": "Kovalenko",
+          "first": "Oleksandr",
+          "middle": null
+        },
+        "residential_address": {
+          "street": "145 Maple Ridge Drive NW",
+          "unit": null,
+          "city": "Calgary",
+          "province": "AB",
+          "postal_code": "T3G 4M2"
+        },
+        "mailing_address": null,
+        "phone_day": null,
+        "cell": "403-555-7234",
+        "email": "oleksandr.kovalenko@gmail.com",
+        "date_of_birth": "1982-03-15",
+        "sin": "NULL",
+        "dependents": "2",
+        "occupation": "Software Engineer",
+        "employer": "Shaw Communications",
+        "citizenship": "Ukraine"
+      },
+
+      "client_b": {
+        "full_name": {
+          "last": "Kovalenko",
+          "first": "Natalia",
+          "middle": null
+        },
+        "residential_address": {
+          "street": "145 Maple Ridge Drive NW",
+          "unit": null,
+          "city": "Calgary",
+          "province": "AB",
+          "postal_code": "T3G 4M2"
+        },
+        "phone_day": null,
+        "cell": "403-555-4321",
+        "email": null,
+        "date_of_birth": null,
+        "sin": "NULL",
+        "dependents": null,
+        "occupation": "Registered Nurse",
+        "employer": "Foothills Hospital"
+      },
+
+      "investment_knowledge": {
+        "level": "GOOD",
+        "products_owned": [
+          "STOCKS_BONDS",
+          "MUTUAL_FUNDS"
+        ],
+        "notes": "Client mentioned 5 years investing experience, understands diversification, risk-return tradeoff, compound interest. Previously used Interactive Brokers in Ukraine, currently uses Questrade. Had Bitcoin previously but sold."
+      },
+
+      "suitability": {
+        "risk_tolerance": "MODERATE",
+        "investment_objective": "GROWTH_AND_INCOME",
+        "time_horizon": "6-10_YEARS",
+        "risk_capacity": "MEDIUM"
+      },
+
+      "financials": {
+        "annual_income": {
+          "client": 140000,
+          "spouse": 85000,
+          "other": 0,
+          "total": 225000
+        },
+        "income_stable_2_years": true,
+        "income_change_expected": "Mentioned income increased from $120k to $140k since arrival, IT sector growing",
+
+        "asset_composition_pct": {
+          "cash_deposits": 21,
+          "public_equities": 9,
+          "fixed_income": 0,
+          "exempt_securities": 0,
+          "insurance_contracts": 0,
+          "registered_plans": 70
+        },
+
+        "exempt_market_securities": 0,
+        "non_exempt_securities": 50000,
+        "net_financial_assets": 580000,
+        "non_financial_assets": 300000,
+        "total_assets": 880000,
+        "liabilities": 400000,
+        "net_worth": 880000,
+        "borrowed_to_invest": false,
+
+        "breakdown_notes": {
+          "savings_account": 120000,
+          "rrsp_client": 180000,
+          "rrsp_spouse": 90000,
+          "tfsa_client": 80000,
+          "tfsa_spouse": 60000,
+          "non_registered_investments": 50000,
+          "home_value": 700000,
+          "mortgage_balance": 400000
+        }
+      },
+
+      "aml_pep": {
+        "is_pep": false,
+        "pep_position": null,
+        "is_hio": false,
+        "is_family_or_associate_of_pep_hio": false
+      },
+
+      "insider_info": {
+        "owns_10_pct_public_company": false,
+        "is_insider_director_officer": false
+      },
+
+      "identification": {
+        "client_a": {
+          "drivers_license": {
+            "type": "Alberta Driver's License",
+            "number": "NULL",
+            "jurisdiction": "Alberta, Canada",
+            "expiry": "NULL"
+          },
+          "passport": {
+            "type": "Ukrainian International Passport",
+            "number": "NULL",
+            "jurisdiction": "Ukraine",
+            "expiry": "NULL"
+          }
+        }
+      },
+
+      "trusted_contact": {
+        "appointed": true,
+        "name": {
+          "last": "Kovalenko",
+          "first": "Natalia",
+          "middle": null
+        },
+        "address": "145 Maple Ridge Drive NW, Calgary, AB T3G 4M2",
+        "phone": null,
+        "cell": "403-555-4321",
+        "email": null
+      },
+
+      "electronic_delivery_consent": {
+        "email_statements": true,
+        "has_technology_access": true
+      }
+    },
+
+    "trade_suitability": {
+      "client_name": "Oleksandr Kovalenko",
+      "source_of_funds": "NON_REGISTERED",
+      "exemption_type": "ELIGIBLE",
+      "kyc_date": null,
+      "kyc_over_12_months": false,
+      "kyc_changes_material": false,
+
+      "investments": [
+        {
+          "issuer": "MIC (Mortgage Investment Corporation)",
+          "class": "NULL",
+          "amount": 50000
+        }
+      ],
+
+      "total_exempt_securities": 50000,
+      "pct_of_nfa": 8.6,
+
+      "planned_retirement_date": "2045",
+      "retirement_age_target": "60-65",
+
+      "conflicts_of_interest": {
+        "none_known": true,
+        "discussed_with_client": false
+      },
+
+      "suitability_questions": {
+        "risk_profile_appropriate": true,
+        "fits_risk_tolerance_and_capacity": true,
+        "fits_time_horizon": true,
+        "fits_investment_objectives": true,
+        "client_can_make_informed_decision": null,
+        "obtained_12_month_em_info": true,
+        "over_10_pct_of_nfa": false,
+        "explained_suitability_determination": null
+      },
+
+      "suitability_notes": "Client is 42-year-old software engineer with stable income of $225k combined with spouse. Net financial assets ~$580k. Investment of $50k in MIC represents 8.6% of NFA, under 10% threshold. Client has moderate risk tolerance, seeking growth with income, 6-10+ year time horizon. Has investment experience with public markets (5 years). First exempt market investment. Non-borrowed funds from savings account."
+    }
+  },
+
+  "confidence_scores": {
+    "client_a.full_name": "HIGH",
+    "client_a.residential_address": "HIGH",
+    "client_a.cell": "HIGH",
+    "client_a.email": "HIGH",
+    "client_a.date_of_birth": "HIGH",
+    "client_a.occupation": "HIGH",
+    "client_a.employer": "HIGH",
+    "client_b.full_name": "HIGH",
+    "client_b.occupation": "HIGH",
+    "client_b.employer": "HIGH",
+    "investment_knowledge.level": "HIGH",
+    "suitability.risk_tolerance": "HIGH",
+    "suitability.investment_objective": "HIGH",
+    "suitability.time_horizon": "MEDIUM",
+    "suitability.risk_capacity": "HIGH",
+    "financials.annual_income": "HIGH",
+    "financials.net_financial_assets": "MEDIUM",
+    "financials.net_worth": "MEDIUM",
+    "aml_pep.is_pep": "HIGH",
+    "trade.investments": "HIGH",
+    "trade.source_of_funds": "HIGH"
+  },
+
+  "missing_required_fields": [
+    "client_a.sin",
+    "client_a.drivers_license.number",
+    "client_a.passport.number",
+    "client_b.date_of_birth",
+    "client_b.email"
+  ],
+
+  "ambiguous_extractions": [
+    {
+      "field": "suitability.time_horizon",
+      "extracted_value": "6-10_YEARS",
+      "alternative_value": "10+_YEARS",
+      "reason": "Client mentioned both '7-10 years' and 'more than 20 years to retirement'. Chose 6-10 as primary investment horizon."
+    },
+    {
+      "field": "financials.net_financial_assets",
+      "extracted_value": 580000,
+      "reason": "Client gave rounded estimates. Actual value could be $570k-$590k as stated."
+    }
+  ],
+
+  "verification_prompts": [
+    "Please provide copies of your Alberta driver's license and Ukrainian passport for ID verification.",
+    "What is Natalia's date of birth for the KYC records?",
+    "What is Natalia's email address (optional but recommended)?",
+    "SIN will be collected separately via secure form - do not share over phone/email."
+  ],
+
+  "exemption_determination": {
+    "status": "ELIGIBLE",
+    "qualifying_criteria": [
+      "Combined income ($225k) exceeds $125k threshold",
+      "Net assets ($880k) exceed $400k threshold"
+    ],
+    "could_qualify_for_accredited": false,
+    "reason_not_accredited": "Individual income ($140k) below $200k threshold. Combined income ($225k) below $300k threshold. NFA ($580k) below $1M threshold.",
+    "rolling_limit_applies": true,
+    "rolling_limit_remaining": 100000
+  },
+
+  "validation_flags": {
+    "warnings": [],
+    "red_flags": [],
+    "compliance_notes": [
+      "First exempt market investment for this client - ensure full product disclosure",
+      "Client is permanent resident, not citizen - verify any provincial residency requirements"
+    ]
+  },
+
+  "processing_metadata": {
+    "transcript_language": "Russian (with Ukrainian phrases)",
+    "transliteration_method": "Ukrainian Latin (Kovalenko, Oleksandr, Natalia)",
+    "currency": "CAD",
+    "extraction_model": "claude-sonnet-4-20250514"
+  }
+}

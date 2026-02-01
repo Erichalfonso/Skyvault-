@@ -1,0 +1,41 @@
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+env/
+
+# Output files
+app/output/
+*.pdf
+!*template*.pdf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Testing & Coverage
+.coverage
+coverage.xml
+coverage_html/
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Ruff
+.ruff_cache/
