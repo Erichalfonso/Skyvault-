@@ -8,10 +8,10 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 
-from extractor import KYCExtractor
-from validator import KYCValidator
-from pdf_filler import KYCPDFFiller
-from emailer import send_kyc_email
+from .extractor import KYCExtractor
+from .validator import KYCValidator
+from .pdf_filler import KYCPDFFiller
+from .emailer import send_kyc_email
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
