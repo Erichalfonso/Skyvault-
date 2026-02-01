@@ -10,7 +10,7 @@ Tests cover:
 """
 
 import pytest
-from validator import KYCValidator, ValidationResult
+from app.validator import KYCValidator, ValidationResult
 
 
 class TestValidationResult:

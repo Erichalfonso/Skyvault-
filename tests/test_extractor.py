@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from extractor import KYCExtractor, EXTRACTION_PROMPT
+from app.extractor import KYCExtractor, EXTRACTION_PROMPT
 
 
 class TestExtractionPrompt:

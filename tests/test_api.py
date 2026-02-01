@@ -21,7 +21,7 @@ class TestHealthCheck:
     @pytest.fixture
     def client(self):
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-            from main import app
+            from app.main import app
             return TestClient(app)
 
     @pytest.mark.integration
@@ -41,7 +41,7 @@ class TestWebhookEndpoint:
     @pytest.fixture
     def client(self):
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-            from main import app
+            from app.main import app
             return TestClient(app)
 
     @pytest.fixture
@@ -59,7 +59,7 @@ class TestWebhookEndpoint:
     @pytest.mark.integration
     def test_webhook_accepts_valid_transcript(self, client, valid_transcript_request):
         """Test webhook accepts valid transcript and returns processing status."""
-        with patch("main.extractor.quick_extract", new_callable=AsyncMock) as mock_extract:
+        with patch("app.main.extractor.quick_extract", new_callable=AsyncMock) as mock_extract:
             mock_extract.return_value = {
                 "first_name": "John",
                 "last_name": "Doe",
@@ -105,7 +105,7 @@ class TestWebhookEndpoint:
     @pytest.mark.integration
     def test_webhook_uses_default_values(self, client):
         """Test webhook uses default values for optional fields."""
-        with patch("main.extractor.quick_extract", new_callable=AsyncMock) as mock_extract:
+        with patch("app.main.extractor.quick_extract", new_callable=AsyncMock) as mock_extract:
             mock_extract.return_value = {
                 "first_name": "Test",
                 "last_name": "User",
@@ -123,7 +123,7 @@ class TestWebhookEndpoint:
     @pytest.mark.integration
     def test_webhook_handles_extraction_failure(self, client, valid_transcript_request):
         """Test webhook handles extraction failure gracefully."""
-        with patch("main.extractor.quick_extract", new_callable=AsyncMock) as mock_extract:
+        with patch("app.main.extractor.quick_extract", new_callable=AsyncMock) as mock_extract:
             mock_extract.side_effect = Exception("API Error")
 
             response = client.post("/webhook/transcript", json=valid_transcript_request)
@@ -135,7 +135,7 @@ class TestWebhookEndpoint:
     @pytest.mark.integration
     def test_webhook_returns_missing_fields(self, client, valid_transcript_request):
         """Test webhook returns missing fields from quick extraction."""
-        with patch("main.extractor.quick_extract", new_callable=AsyncMock) as mock_extract:
+        with patch("app.main.extractor.quick_extract", new_callable=AsyncMock) as mock_extract:
             mock_extract.return_value = {
                 "first_name": "John",
                 "last_name": None,
@@ -155,7 +155,7 @@ class TestSyncExtractEndpoint:
     @pytest.fixture
     def client(self):
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-            from main import app
+            from app.main import app
             return TestClient(app)
 
     @pytest.fixture
@@ -175,7 +175,7 @@ class TestSyncExtractEndpoint:
             "financials": {"annual_income": 200000}
         }
 
-        with patch("main.extractor.extract", new_callable=AsyncMock) as mock_extract:
+        with patch("app.main.extractor.extract", new_callable=AsyncMock) as mock_extract:
             mock_extract.return_value = mock_extracted
 
             response = client.post("/extract/sync", json=valid_transcript_request)
@@ -194,7 +194,7 @@ class TestSyncExtractEndpoint:
             "financials": {"annual_income": 250000, "income_stable_2_years": True}
         }
 
-        with patch("main.extractor.extract", new_callable=AsyncMock) as mock_extract:
+        with patch("app.main.extractor.extract", new_callable=AsyncMock) as mock_extract:
             mock_extract.return_value = mock_extracted
 
             response = client.post("/extract/sync", json=valid_transcript_request)
@@ -211,7 +211,7 @@ class TestSyncExtractEndpoint:
             "business_number": "123456789"
         }
 
-        with patch("main.extractor.extract", new_callable=AsyncMock) as mock_extract:
+        with patch("app.main.extractor.extract", new_callable=AsyncMock) as mock_extract:
             mock_extract.return_value = mock_extracted
 
             response = client.post("/extract/sync", json={
@@ -230,7 +230,7 @@ class TestRequestValidation:
     @pytest.fixture
     def client(self):
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-            from main import app
+            from app.main import app
             return TestClient(app)
 
     @pytest.mark.integration
@@ -256,7 +256,7 @@ class TestRequestValidation:
     @pytest.mark.integration
     def test_accepts_minimal_request(self, client):
         """Test accepts request with only required fields."""
-        with patch("main.extractor.quick_extract", new_callable=AsyncMock) as mock_extract:
+        with patch("app.main.extractor.quick_extract", new_callable=AsyncMock) as mock_extract:
             mock_extract.return_value = {"first_name": "Test", "last_name": "User", "missing_fields": []}
 
             response = client.post("/webhook/transcript", json={
@@ -272,16 +272,16 @@ class TestBackgroundProcessing:
     @pytest.fixture
     def client(self):
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-            from main import app
+            from app.main import app
             return TestClient(app)
 
     @pytest.mark.integration
     def test_background_task_is_queued(self, client):
         """Test that background processing task is queued."""
-        with patch("main.extractor.quick_extract", new_callable=AsyncMock) as mock_quick:
+        with patch("app.main.extractor.quick_extract", new_callable=AsyncMock) as mock_quick:
             mock_quick.return_value = {"first_name": "John", "last_name": "Doe", "missing_fields": []}
 
-            with patch("main.BackgroundTasks.add_task") as mock_add_task:
+            with patch("app.main.BackgroundTasks.add_task") as mock_add_task:
                 # Note: TestClient runs background tasks synchronously by default
                 response = client.post("/webhook/transcript", json={
                     "transcript": "A long enough transcript to process for background task testing purposes."
