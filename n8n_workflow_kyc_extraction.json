@@ -1,0 +1,483 @@
+{
+  "name": "KYC Form Filler - Multilingual Transcript Extraction",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "kyc-transcript",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Receive Transcript",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "kyc-transcript-intake"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.input_type }}",
+              "operation": "equals",
+              "value2": "audio"
+            }
+          ]
+        }
+      },
+      "id": "if-audio",
+      "name": "Check if Audio",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $json.audio_file }}"
+            },
+            {
+              "name": "model",
+              "value": "whisper-1"
+            },
+            {
+              "name": "language",
+              "value": "={{ $json.source_language || 'ru' }}"
+            },
+            {
+              "name": "response_format",
+              "value": "verbose_json"
+            },
+            {
+              "name": "prompt",
+              "value": "This is a financial consultation call discussing investments, income, assets, risk tolerance, and KYC information. Names may be Ukrainian or Russian."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "whisper-transcribe",
+      "name": "Whisper Transcription",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [650, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "openai-api-key",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge audio transcription path with direct text path\nconst items = $input.all();\nlet transcript = '';\nlet metadata = {};\n\nfor (const item of items) {\n  if (item.json.text) {\n    // From Whisper\n    transcript = item.json.text;\n    metadata = {\n      source: 'whisper',\n      language_detected: item.json.language,\n      duration: item.json.duration,\n      segments: item.json.segments\n    };\n  } else if (item.json.transcript) {\n    // Direct text input\n    transcript = item.json.transcript;\n    metadata = {\n      source: 'direct_text',\n      language_detected: item.json.source_language || 'unknown'\n    };\n  }\n}\n\nreturn [{\n  json: {\n    transcript,\n    metadata,\n    client_id: items[0].json.client_id || 'UNKNOWN',\n    dealing_rep: items[0].json.dealing_rep || 'Andrii Andriushchenko',\n    call_date: items[0].json.call_date || new Date().toISOString().split('T')[0]\n  }\n}];"
+      },
+      "id": "merge-transcript",
+      "name": "Merge Transcript Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 8000,\n  \"system\": \"You are a KYC Data Extraction Agent for Axcess Capital Advisors Inc., a Canadian Exempt Market Dealer. Your task is to extract client information from call transcripts (which may be in Russian, Ukrainian, or English) and map it to the standardized JSON schema.\\n\\n## CRITICAL RULES\\n\\n1. **NEVER HALLUCINATE** - If information is not explicitly stated in the transcript, return \\\"NULL\\\" for that field. Do not infer, guess, or assume.\\n\\n2. **SENSITIVE DATA HANDLING**:\\n   - SIN (Social Insurance Number): ALWAYS return \\\"NULL\\\" - flag for manual collection\\n   - Bank account numbers: ALWAYS return \\\"NULL\\\" - flag for manual collection\\n   - These must be collected via secure channels, not voice\\n\\n3. **CONFIDENCE SCORING**: For every extracted field, provide a confidence score:\\n   - \\\"HIGH\\\" (0.9-1.0): Explicitly stated, no ambiguity\\n   - \\\"MEDIUM\\\" (0.6-0.89): Stated but with some interpretation needed\\n   - \\\"LOW\\\" (0.3-0.59): Inferred from context\\n   - \\\"NULL\\\": Not mentioned at all\\n\\n4. **MULTILINGUAL HANDLING**:\\n   - Transcript may mix Russian/Ukrainian/English\\n   - Financial terms may be stated in native language - translate accurately\\n   - Names should be transliterated to Latin alphabet (Ukrainian/Russian → English)\\n   - Addresses in Canada should be standardized to Canadian postal format\\n\\n5. **EXEMPTION DETERMINATION** (NI 45-106):\\n   - Accredited Investor: Net income >$200k (alone) or >$300k (with spouse) for 2 years, OR Net financial assets >$1M, OR Net assets >$5M\\n   - Eligible Investor: Net income >$75k (alone) or >$125k (with spouse), OR Net assets >$400k\\n   - If unclear, flag for verification\\n\\n6. **RISK TOLERANCE MAPPING**:\\n   Listen for phrases like:\\n   - LOW: \\\"I can't afford to lose money\\\", \\\"safety is priority\\\", \\\"need liquidity\\\"\\n   - MODERATE: \\\"some risk is okay\\\", \\\"long-term growth\\\", \\\"don't need the money soon\\\"\\n   - HIGH: \\\"maximize returns\\\", \\\"willing to take big risks\\\", \\\"money I can afford to lose\\\"\\n\\n7. **TIME HORIZON MAPPING**:\\n   - \\\"retirement in X years\\\" → map to appropriate bracket\\n   - \\\"short-term\\\" → 1-3 years\\n   - \\\"medium-term\\\" → 3-5 years\\n   - \\\"long-term\\\" → 6-10+ years\\n\\n## OUTPUT FORMAT\\n\\nReturn ONLY valid JSON with:\\n1. `extracted_data`: The filled schema\\n2. `confidence_scores`: Per-field confidence ratings\\n3. `missing_required_fields`: List of critical fields not found\\n4. `ambiguous_extractions`: Fields where interpretation was required\\n5. `verification_prompts`: Suggested follow-up questions\\n6. `form_recommendation`: Which form(s) to populate (INDIVIDUAL_KYC, CORPORATE_KYC, TRADE_SUITABILITY)\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Extract KYC data from this transcript. Return ONLY valid JSON, no markdown.\\n\\nTranscript:\\n{{ $json.transcript }}\\n\\nCall Date: {{ $json.call_date }}\\nDealing Representative: {{ $json.dealing_rep }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "claude-extraction",
+      "name": "Claude - Extract KYC Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "anthropic-api-key",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude's response and extract the JSON\nconst response = $input.first().json;\nlet extractedData = {};\n\ntry {\n  // Claude returns content array with text\n  const content = response.content[0].text;\n  \n  // Try to parse as JSON directly\n  try {\n    extractedData = JSON.parse(content);\n  } catch (e) {\n    // If wrapped in markdown code blocks, extract\n    const jsonMatch = content.match(/```json?\\n?([\\s\\S]*?)\\n?```/);\n    if (jsonMatch) {\n      extractedData = JSON.parse(jsonMatch[1]);\n    } else {\n      throw new Error('Could not parse Claude response as JSON');\n    }\n  }\n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      message: error.message,\n      raw_response: response\n    }\n  }];\n}\n\n// Add metadata\nextractedData.processing_metadata = {\n  extraction_timestamp: new Date().toISOString(),\n  model_used: 'claude-sonnet-4-20250514',\n  tokens_used: response.usage\n};\n\nreturn [{ json: extractedData }];"
+      },
+      "id": "parse-claude-response",
+      "name": "Parse Claude Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Regulatory Validation Layer for Canadian Exempt Market\nconst data = $input.first().json;\nconst validationResults = {\n  passed: true,\n  errors: [],\n  warnings: [],\n  red_flags: [],\n  compliance_notes: []\n};\n\nconst extracted = data.extracted_data || {};\nconst individual = extracted.individual_kyc || {};\nconst corporate = extracted.corporate_kyc || {};\nconst trade = extracted.trade_suitability || {};\n\n// ========== CRITICAL VALIDATIONS ==========\n\n// 1. Accredited Investor Threshold Check\nif (extracted.form_recommendation?.includes('INDIVIDUAL_KYC')) {\n  const financials = individual.financials || {};\n  const income = financials.annual_income?.total || 0;\n  const spouseIncome = financials.annual_income?.spouse || 0;\n  const nfa = financials.net_financial_assets || 0;\n  const netWorth = financials.net_worth || 0;\n  \n  // Check if claiming Accredited status\n  const isAccredited = income >= 200000 || \n                       (income + spouseIncome) >= 300000 || \n                       nfa >= 1000000 || \n                       netWorth >= 5000000;\n  \n  const isEligible = income >= 75000 || \n                     (income + spouseIncome) >= 125000 || \n                     netWorth >= 400000;\n  \n  if (!isAccredited && !isEligible && financials.net_financial_assets !== 'NULL') {\n    validationResults.warnings.push({\n      code: 'EXEMPTION_STATUS',\n      message: 'Client may only qualify for <$10,000 exemption. Verify financials.',\n      field: 'exemption_type'\n    });\n  }\n  \n  // 2. Concentration Limit Check (10% of NFA)\n  if (trade.investments && nfa > 0) {\n    const totalInvestment = trade.investments.reduce((sum, inv) => sum + (inv.amount || 0), 0);\n    const concentration = (totalInvestment / nfa) * 100;\n    \n    if (concentration > 10) {\n      validationResults.warnings.push({\n        code: 'CONCENTRATION_LIMIT',\n        message: `Investment represents ${concentration.toFixed(1)}% of NFA (>10%). Requires suitability justification.`,\n        field: 'pct_of_nfa',\n        value: concentration\n      });\n    }\n  }\n  \n  // 3. $100k Rolling Limit (non-BC, non-Accredited)\n  const province = individual.client_a?.residential_address?.province || '';\n  if (province !== 'BC' && !isAccredited) {\n    const totalExempt = financials.exempt_market_securities || 0;\n    if (totalExempt > 100000) {\n      validationResults.errors.push({\n        code: 'ROLLING_LIMIT_EXCEEDED',\n        message: `Total exempt securities ($${totalExempt.toLocaleString()}) exceeds $100k rolling limit for eligible investors.`,\n        field: 'exempt_market_securities',\n        severity: 'HIGH'\n      });\n      validationResults.passed = false;\n    }\n  }\n}\n\n// ========== AML RED FLAGS ==========\n\n// 4. PEP/HIO Detection\nconst aml = individual.aml_pep || corporate.aml_pep || {};\nif (aml.is_pep || aml.is_hio || aml.is_family_or_associate_of_pep_hio) {\n  validationResults.red_flags.push({\n    code: 'PEP_DETECTED',\n    message: 'Client identified as Politically Exposed Person or associated. Enhanced due diligence required.',\n    action: 'ESCALATE_TO_CCO'\n  });\n}\n\n// 5. Source of Funds - Borrowed Money\nconst borrowed = individual.financials?.borrowed_to_invest || \n                 corporate.financials?.borrowed_to_invest ||\n                 trade.source_of_funds === 'BORROWED';\nif (borrowed) {\n  validationResults.warnings.push({\n    code: 'LEVERAGED_INVESTMENT',\n    message: 'Client using borrowed funds. Leverage Disclosure Form required.',\n    action: 'ATTACH_LEVERAGE_FORM'\n  });\n}\n\n// 6. Risk Tolerance vs Age Mismatch\nconst dob = individual.client_a?.date_of_birth;\nif (dob && dob !== 'NULL') {\n  const age = new Date().getFullYear() - new Date(dob).getFullYear();\n  const riskTolerance = individual.suitability?.risk_tolerance;\n  \n  if (age >= 65 && riskTolerance === 'HIGH') {\n    validationResults.warnings.push({\n      code: 'AGE_RISK_MISMATCH',\n      message: `Client age (${age}) with HIGH risk tolerance requires additional suitability documentation.`,\n      field: 'risk_tolerance'\n    });\n  }\n}\n\n// 7. Time Horizon vs Retirement Mismatch\nconst retirementDate = trade.planned_retirement_date;\nconst timeHorizon = individual.suitability?.time_horizon;\nif (retirementDate && timeHorizon) {\n  // Simple check - if retiring soon but long time horizon selected\n  const yearsToRetirement = retirementDate ? \n    (new Date(retirementDate).getFullYear() - new Date().getFullYear()) : null;\n  \n  if (yearsToRetirement && yearsToRetirement < 3 && timeHorizon === '10+_YEARS') {\n    validationResults.warnings.push({\n      code: 'HORIZON_RETIREMENT_MISMATCH',\n      message: `Retirement in ${yearsToRetirement} years conflicts with 10+ year time horizon.`,\n      fields: ['time_horizon', 'planned_retirement_date']\n    });\n  }\n}\n\n// ========== MISSING REQUIRED FIELDS ==========\n\nconst requiredIndividualFields = [\n  'client_a.full_name.first',\n  'client_a.full_name.last',\n  'client_a.residential_address.street',\n  'client_a.residential_address.city',\n  'client_a.residential_address.province',\n  'client_a.residential_address.postal_code',\n  'client_a.date_of_birth',\n  'client_a.email',\n  'client_a.cell',\n  'suitability.risk_tolerance',\n  'suitability.investment_objective',\n  'suitability.time_horizon',\n  'financials.annual_income.total',\n  'financials.net_financial_assets'\n];\n\nconst missingFields = data.missing_required_fields || [];\nif (missingFields.length > 5) {\n  validationResults.warnings.push({\n    code: 'INSUFFICIENT_DATA',\n    message: `${missingFields.length} required fields missing. Follow-up call recommended.`,\n    fields: missingFields\n  });\n}\n\n// ========== COMPLIANCE NOTES ==========\n\n// KYC Age Check\nif (trade.kyc_over_12_months) {\n  validationResults.compliance_notes.push({\n    code: 'KYC_REFRESH_REQUIRED',\n    message: 'KYC is over 12 months old. Full KYC update required before processing trade.'\n  });\n}\n\n// Material Changes\nif (trade.kyc_changes_material) {\n  validationResults.compliance_notes.push({\n    code: 'MATERIAL_CHANGES',\n    message: 'Material KYC changes detected. Update KYC and reassess suitability.'\n  });\n}\n\n// Final output\nreturn [{\n  json: {\n    ...data,\n    validation: validationResults,\n    requires_human_review: !validationResults.passed || \n                           validationResults.red_flags.length > 0 ||\n                           validationResults.warnings.length > 2,\n    review_priority: validationResults.red_flags.length > 0 ? 'HIGH' : \n                     validationResults.errors.length > 0 ? 'MEDIUM' : 'LOW'\n  }\n}];"
+      },
+      "id": "validation-layer",
+      "name": "Regulatory Validation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map extracted data to PDF field IDs\nconst data = $input.first().json;\nconst extracted = data.extracted_data || {};\nconst individual = extracted.individual_kyc || {};\nconst trade = extracted.trade_suitability || {};\n\n// Individual KYC Form Field Mapping\nconst individualKycFields = {\n  // Section 1 - Client Profile\n  'client_a_last_name': individual.client_a?.full_name?.last || '',\n  'client_a_first_name': individual.client_a?.full_name?.first || '',\n  'client_a_middle_name': individual.client_a?.full_name?.middle || '',\n  'client_a_street': individual.client_a?.residential_address?.street || '',\n  'client_a_unit': individual.client_a?.residential_address?.unit || '',\n  'client_a_city': individual.client_a?.residential_address?.city || '',\n  'client_a_province': individual.client_a?.residential_address?.province || '',\n  'client_a_postal': individual.client_a?.residential_address?.postal_code || '',\n  'client_a_phone': individual.client_a?.phone_day || '',\n  'client_a_cell': individual.client_a?.cell || '',\n  'client_a_email': individual.client_a?.email || '',\n  'client_a_dob': individual.client_a?.date_of_birth || '',\n  'client_a_sin': '', // Never auto-fill SIN\n  'client_a_dependents': individual.client_a?.dependents || '',\n  'client_a_occupation': individual.client_a?.occupation || '',\n  'client_a_employer': individual.client_a?.employer || '',\n  \n  // Section 2 - Investment Knowledge\n  'knowledge_good': individual.investment_knowledge?.level === 'GOOD',\n  'knowledge_average': individual.investment_knowledge?.level === 'AVERAGE',\n  'knowledge_limited': individual.investment_knowledge?.level === 'LIMITED',\n  'owns_stocks_bonds': individual.investment_knowledge?.products_owned?.includes('STOCKS_BONDS'),\n  'owns_mutual_funds': individual.investment_knowledge?.products_owned?.includes('MUTUAL_FUNDS'),\n  'owns_segregated': individual.investment_knowledge?.products_owned?.includes('SEGREGATED_FUNDS'),\n  'owns_crypto': individual.investment_knowledge?.products_owned?.includes('CRYPTO'),\n  'owns_gold': individual.investment_knowledge?.products_owned?.includes('GOLD_PRECIOUS_METALS'),\n  'owns_mics': individual.investment_knowledge?.products_owned?.includes('MICS'),\n  'owns_lp': individual.investment_knowledge?.products_owned?.includes('LIMITED_PARTNERSHIPS'),\n  'owns_exempt': individual.investment_knowledge?.products_owned?.includes('EXEMPT_SECURITIES'),\n  \n  // Section 3 - Suitability\n  'risk_low': individual.suitability?.risk_tolerance === 'LOW',\n  'risk_moderate': individual.suitability?.risk_tolerance === 'MODERATE',\n  'risk_high': individual.suitability?.risk_tolerance === 'HIGH',\n  'objective_growth': individual.suitability?.investment_objective === 'GROWTH',\n  'objective_growth_income': individual.suitability?.investment_objective === 'GROWTH_AND_INCOME',\n  'objective_income': individual.suitability?.investment_objective === 'INCOME',\n  'objective_tax': individual.suitability?.investment_objective === 'TAX_EFFICIENCY',\n  'horizon_1_3': individual.suitability?.time_horizon === '1-3_YEARS',\n  'horizon_3_5': individual.suitability?.time_horizon === '3-5_YEARS',\n  'horizon_6_10': individual.suitability?.time_horizon === '6-10_YEARS',\n  'horizon_10_plus': individual.suitability?.time_horizon === '10+_YEARS',\n  'capacity_high': individual.suitability?.risk_capacity === 'HIGH',\n  'capacity_medium': individual.suitability?.risk_capacity === 'MEDIUM',\n  'capacity_low': individual.suitability?.risk_capacity === 'LOW',\n  'capacity_nil': individual.suitability?.risk_capacity === 'NIL',\n  \n  // Section 4 - Financials\n  'annual_income': individual.financials?.annual_income?.client || '',\n  'spouse_income': individual.financials?.annual_income?.spouse || '',\n  'other_income': individual.financials?.annual_income?.other || '',\n  'total_income': individual.financials?.annual_income?.total || '',\n  'income_stable_yes': individual.financials?.income_stable_2_years === true,\n  'income_stable_no': individual.financials?.income_stable_2_years === false,\n  'exempt_securities': individual.financials?.exempt_market_securities || '',\n  'non_exempt_securities': individual.financials?.non_exempt_securities || '',\n  'net_financial_assets': individual.financials?.net_financial_assets || '',\n  'non_financial_assets': individual.financials?.non_financial_assets || '',\n  'total_assets': individual.financials?.total_assets || '',\n  'liabilities': individual.financials?.liabilities || '',\n  'net_worth': individual.financials?.net_worth || '',\n  'borrowed_yes': individual.financials?.borrowed_to_invest === true,\n  'borrowed_no': individual.financials?.borrowed_to_invest === false,\n  \n  // Section 5 - AML/PEP\n  'pep_yes': individual.aml_pep?.is_pep === true,\n  'pep_no': individual.aml_pep?.is_pep === false,\n  'hio_yes': individual.aml_pep?.is_hio === true,\n  'hio_no': individual.aml_pep?.is_hio === false,\n  'pep_family_yes': individual.aml_pep?.is_family_or_associate_of_pep_hio === true,\n  'pep_family_no': individual.aml_pep?.is_family_or_associate_of_pep_hio === false\n};\n\n// Trade Suitability Form Field Mapping\nconst tradeSuitabilityFields = {\n  'trade_date': new Date().toISOString().split('T')[0],\n  'dealing_rep': 'Andrii Andriushchenko',\n  'client_name': trade.client_name || `${individual.client_a?.full_name?.first || ''} ${individual.client_a?.full_name?.last || ''}`.trim(),\n  'source_non_reg': trade.source_of_funds === 'NON_REGISTERED',\n  'source_rrsp': trade.source_of_funds === 'RRSP',\n  'source_tfsa': trade.source_of_funds === 'TFSA',\n  'source_borrowed': trade.source_of_funds === 'BORROWED',\n  'source_other': trade.source_of_funds === 'OTHER',\n  'exemption_10k': trade.exemption_type === 'UNDER_10K',\n  'exemption_eligible': trade.exemption_type === 'ELIGIBLE',\n  'exemption_accredited': trade.exemption_type === 'ACCREDITED',\n  'exemption_permitted': trade.exemption_type === 'PERMITTED',\n  'kyc_date': trade.kyc_date || '',\n  'kyc_over_12_yes': trade.kyc_over_12_months === true,\n  'kyc_over_12_no': trade.kyc_over_12_months === false,\n  'kyc_material_yes': trade.kyc_changes_material === true,\n  'kyc_material_no': trade.kyc_changes_material === false,\n  'planned_retirement': trade.planned_retirement_date || '',\n  'total_exempt_amount': trade.total_exempt_securities || '',\n  'nfa_percentage': trade.pct_of_nfa || ''\n};\n\n// Add investment rows\nif (trade.investments && trade.investments.length > 0) {\n  trade.investments.forEach((inv, idx) => {\n    if (idx < 5) { // Form has 5 investment rows\n      tradeSuitabilityFields[`investment_${idx + 1}_issuer`] = inv.issuer || '';\n      tradeSuitabilityFields[`investment_${idx + 1}_class`] = inv.class || '';\n      tradeSuitabilityFields[`investment_${idx + 1}_amount`] = inv.amount || '';\n    }\n  });\n}\n\nreturn [{\n  json: {\n    ...data,\n    pdf_field_mapping: {\n      individual_kyc: individualKycFields,\n      trade_suitability: tradeSuitabilityFields\n    }\n  }\n}];"
+      },
+      "id": "pdf-field-mapper",
+      "name": "Map to PDF Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.requires_human_review }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-review-required",
+      "name": "Requires Review?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.httpHeaderAuth.value }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"kyc-review\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"🔍 KYC Review Required - {{ $json.review_priority }} Priority\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Client:*\\n{{ $json.extracted_data.individual_kyc.client_a.full_name.first }} {{ $json.extracted_data.individual_kyc.client_a.full_name.last }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Extraction Date:*\\n{{ $json.processing_metadata.extraction_timestamp }}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Validation Issues:*\\n{{ $json.validation.warnings.map(w => '⚠️ ' + w.message).join('\\\\n') || 'None' }}\\n\\n*Red Flags:*\\n{{ $json.validation.red_flags.map(r => '🚨 ' + r.message).join('\\\\n') || 'None' }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Missing Fields:*\\n{{ $json.missing_required_fields?.slice(0, 5).join(', ') || 'None' }}{{ $json.missing_required_fields?.length > 5 ? ' (+' + ($json.missing_required_fields.length - 5) + ' more)' : '' }}\"\n      }\n    },\n    {\n      \"type\": \"actions\",\n      \"elements\": [\n        {\n          \"type\": \"button\",\n          \"text\": {\n            \"type\": \"plain_text\",\n            \"text\": \"✅ Approve & Generate PDF\"\n          },\n          \"style\": \"primary\",\n          \"value\": \"approve_{{ $json.client_id }}\"\n        },\n        {\n          \"type\": \"button\",\n          \"text\": {\n            \"type\": \"plain_text\",\n            \"text\": \"📝 Edit Data\"\n          },\n          \"value\": \"edit_{{ $json.client_id }}\"\n        },\n        {\n          \"type\": \"button\",\n          \"text\": {\n            \"type\": \"plain_text\",\n            \"text\": \"❌ Reject\"\n          },\n          \"style\": \"danger\",\n          \"value\": \"reject_{{ $json.client_id }}\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "slack-notification",
+      "name": "Send to Slack for Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2050, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "slack-bot-token",
+          "name": "Slack Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://app.useanvil.com/api/v1/fill/{{ $env.ANVIL_INDIVIDUAL_KYC_TEMPLATE_ID }}.pdf",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"KYC - {{ $json.extracted_data.individual_kyc.client_a.full_name.first }} {{ $json.extracted_data.individual_kyc.client_a.full_name.last }}\",\n  \"fontSize\": 10,\n  \"textColor\": \"#000000\",\n  \"data\": {{ JSON.stringify($json.pdf_field_mapping.individual_kyc) }}\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "anvil-generate-pdf",
+      "name": "Generate PDF (Anvil)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2050, 400],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "anvil-api-key",
+          "name": "Anvil API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "parentId": "={{ $env.GOOGLE_DRIVE_KYC_FOLDER_ID }}",
+        "name": "=KYC_{{ $json.extracted_data.individual_kyc.client_a.full_name.last }}_{{ $json.extracted_data.individual_kyc.client_a.full_name.first }}_{{ new Date().toISOString().split('T')[0] }}.pdf",
+        "driveId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "My Drive"
+        }
+      },
+      "id": "save-to-drive",
+      "name": "Save to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [2250, 400],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google-drive-oauth",
+          "name": "Google Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": "={{ $env.AIRTABLE_BASE_ID }}",
+        "table": "KYC_Records",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Client Name": "={{ $json.extracted_data.individual_kyc.client_a.full_name.first }} {{ $json.extracted_data.individual_kyc.client_a.full_name.last }}",
+            "Email": "={{ $json.extracted_data.individual_kyc.client_a.email }}",
+            "Phone": "={{ $json.extracted_data.individual_kyc.client_a.cell }}",
+            "Risk Tolerance": "={{ $json.extracted_data.individual_kyc.suitability.risk_tolerance }}",
+            "Investment Objective": "={{ $json.extracted_data.individual_kyc.suitability.investment_objective }}",
+            "Time Horizon": "={{ $json.extracted_data.individual_kyc.suitability.time_horizon }}",
+            "Net Worth": "={{ $json.extracted_data.individual_kyc.financials.net_worth }}",
+            "Net Financial Assets": "={{ $json.extracted_data.individual_kyc.financials.net_financial_assets }}",
+            "Annual Income": "={{ $json.extracted_data.individual_kyc.financials.annual_income.total }}",
+            "Exemption Status": "={{ $json.extracted_data.trade_suitability.exemption_type }}",
+            "Validation Status": "={{ $json.validation.passed ? 'PASSED' : 'REQUIRES_REVIEW' }}",
+            "Red Flags": "={{ $json.validation.red_flags.map(r => r.code).join(', ') }}",
+            "Missing Fields": "={{ $json.missing_required_fields?.join(', ') }}",
+            "PDF Link": "={{ $json.pdf_url }}",
+            "Extraction Date": "={{ $json.processing_metadata.extraction_timestamp }}",
+            "Dealing Rep": "=Andrii Andriushchenko"
+          }
+        }
+      },
+      "id": "airtable-record",
+      "name": "Create Airtable Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [2450, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-token",
+          "name": "Airtable"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"client_name\": \"{{ $json.extracted_data.individual_kyc.client_a.full_name.first }} {{ $json.extracted_data.individual_kyc.client_a.full_name.last }}\",\n  \"validation_passed\": {{ $json.validation.passed }},\n  \"requires_review\": {{ $json.requires_human_review }},\n  \"review_priority\": \"{{ $json.review_priority }}\",\n  \"missing_fields_count\": {{ $json.missing_required_fields?.length || 0 }},\n  \"red_flags_count\": {{ $json.validation.red_flags?.length || 0 }},\n  \"pdf_generated\": true,\n  \"airtable_record_id\": \"{{ $json.id }}\"\n}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive Transcript": {
+      "main": [
+        [
+          {
+            "node": "Check if Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Audio": {
+      "main": [
+        [
+          {
+            "node": "Whisper Transcription",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Transcript Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Whisper Transcription": {
+      "main": [
+        [
+          {
+            "node": "Merge Transcript Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Transcript Sources": {
+      "main": [
+        [
+          {
+            "node": "Claude - Extract KYC Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude - Extract KYC Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Claude Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Claude Response": {
+      "main": [
+        [
+          {
+            "node": "Regulatory Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regulatory Validation": {
+      "main": [
+        [
+          {
+            "node": "Map to PDF Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map to PDF Fields": {
+      "main": [
+        [
+          {
+            "node": "Requires Review?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Requires Review?": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack for Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate PDF (Anvil)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Slack for Review": {
+      "main": [
+        [
+          {
+            "node": "Create Airtable Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate PDF (Anvil)": {
+      "main": [
+        [
+          {
+            "node": "Save to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Create Airtable Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Airtable Record": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "KYC",
+      "id": "1"
+    },
+    {
+      "name": "Production",
+      "id": "2"
+    }
+  ]
+}
